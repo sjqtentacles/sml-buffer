@@ -18,6 +18,7 @@ struct
 
   fun length ({ len, ... } : buffer) = !len
   fun isEmpty b = length b = 0
+  fun capacity ({ arr, ... } : buffer) = CharArray.length (!arr)
 
   (* Ensure the backing array can hold at least `need` total bytes. *)
   fun ensure ({ arr, len } : buffer) need =
@@ -79,7 +80,54 @@ struct
   fun contents ({ arr, len } : buffer) =
     CharArraySlice.vector (CharArraySlice.slice (!arr, 0, SOME (!len)))
 
+  fun contentsSlice ({ arr, len } : buffer) start n =
+    if start < 0 orelse n < 0 orelse start + n > !len then raise Subscript
+    else CharArraySlice.vector (CharArraySlice.slice (!arr, start, SOME n))
+
+  fun last ({ arr, len } : buffer) =
+    if !len = 0 then NONE else SOME (CharArray.sub (!arr, !len - 1))
+
+  fun update ({ arr, len } : buffer) i c =
+    if i < 0 orelse i >= !len then raise Subscript
+    else CharArray.update (!arr, i, c)
+
   fun clear ({ len, ... } : buffer) = len := 0
+
+  fun truncate ({ len, ... } : buffer) n =
+    if n < 0 then len := 0
+    else if n < !len then len := n
+    else ()
+
+  fun reserve b n = ensure b n
+
+  fun addChars b c n =
+    if n <= 0 then ()
+    else (ensure b (length b + n);
+          let
+            val { arr, len } = b
+            fun loop i =
+              if i >= n then ()
+              else (CharArray.update (!arr, !len + i, c); loop (i + 1))
+          in
+            loop 0;
+            len := !len + n
+          end)
+
+  fun addInt b i = addString b (Int.toString i)
+
+  fun addLine b s = (addString b s; addChar b #"\n")
+
+  fun appChars f ({ arr, len } : buffer) =
+    let
+      fun loop i = if i >= !len then () else (f (CharArray.sub (!arr, i)); loop (i + 1))
+    in loop 0 end
+
+  fun foldChars f acc ({ arr, len } : buffer) =
+    let
+      fun loop (i, a) =
+        if i >= !len then a
+        else loop (i + 1, f (CharArray.sub (!arr, i), a))
+    in loop (0, acc) end
 
   fun build f =
     let val b = empty () in f b; contents b end

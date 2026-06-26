@@ -77,6 +77,80 @@ struct
       val () = checkString "concatWith" ("a,b,c", Buffer.concatWith "," ["a", "b", "c"])
       val () = checkString "concatWith single" ("a", Buffer.concatWith "," ["a"])
       val () = checkString "concatWith empty" ("", Buffer.concatWith "," [])
+
+      val () = section "Buffer capacity / reserve / truncate"
+
+      val () = checkBool "capacity >= length"
+                 (true, Buffer.capacity (Buffer.empty ()) >= 0)
+      val () = checkInt "new hint sets capacity >= hint"
+                 (100, Int.min (100, Buffer.capacity (Buffer.new 100)))
+      val cb = Buffer.empty ()
+      val () = Buffer.reserve cb 1000
+      val () = checkBool "reserve grows capacity" (true, Buffer.capacity cb >= 1000)
+      val () = checkInt "reserve keeps length 0" (0, Buffer.length cb)
+      val () = Buffer.addString cb "hello"
+      val capBefore = Buffer.capacity cb
+      val () = Buffer.reserve cb 4
+      val () = checkBool "reserve never shrinks" (true, Buffer.capacity cb = capBefore)
+
+      val tb = Buffer.empty ()
+      val () = Buffer.addString tb "abcdefgh"
+      val () = Buffer.truncate tb 3
+      val () = checkString "truncate to 3" ("abc", Buffer.contents tb)
+      val () = Buffer.truncate tb 100
+      val () = checkString "truncate beyond length is noop" ("abc", Buffer.contents tb)
+      val () = Buffer.truncate tb ~1
+      val () = checkInt "truncate negative clears" (0, Buffer.length tb)
+
+      val () = section "Buffer addChars / addInt / addLine"
+
+      val () = checkString "addChars repeats"
+                 ("aaaaa", Buffer.build (fn b => Buffer.addChars b #"a" 5))
+      val () = checkString "addChars zero is noop"
+                 ("", Buffer.build (fn b => Buffer.addChars b #"a" 0))
+      val () = checkString "addChars negative is noop"
+                 ("x", Buffer.build (fn b => (Buffer.addString b "x"; Buffer.addChars b #"a" ~3)))
+      val () = checkString "addInt positive"
+                 ("42", Buffer.build (fn b => Buffer.addInt b 42))
+      val () = checkString "addInt negative"
+                 ("~7", Buffer.build (fn b => Buffer.addInt b ~7))
+      val () = checkString "addInt sequence"
+                 ("1,2,3", Buffer.build (fn b =>
+                    (Buffer.addInt b 1; Buffer.addChar b #","; Buffer.addInt b 2;
+                     Buffer.addChar b #","; Buffer.addInt b 3)))
+      val () = checkString "addLine appends newline"
+                 ("one\ntwo\n", Buffer.build (fn b =>
+                    (Buffer.addLine b "one"; Buffer.addLine b "two")))
+
+      val () = section "Buffer last / update / contentsSlice"
+
+      val () = checkBool "last empty is NONE" (true, Buffer.last (Buffer.empty ()) = NONE)
+      val lb = Buffer.empty ()
+      val () = Buffer.addString lb "abcdef"
+      val () = checkBool "last char" (true, Buffer.last lb = SOME #"f")
+      val () = Buffer.update lb 0 #"Z"
+      val () = checkString "update in place" ("Zbcdef", Buffer.contents lb)
+      val () = checkInt "update keeps length" (6, Buffer.length lb)
+      val () = checkRaises "update out of range raises" (fn () => Buffer.update lb 6 #"x")
+      val () = checkRaises "update negative raises" (fn () => Buffer.update lb ~1 #"x")
+      val () = checkString "contentsSlice mid" ("cde", Buffer.contentsSlice lb 2 3)
+      val () = checkString "contentsSlice empty len" ("", Buffer.contentsSlice lb 2 0)
+      val () = checkString "contentsSlice whole" ("Zbcdef", Buffer.contentsSlice lb 0 6)
+      val () = checkRaises "contentsSlice overrun raises" (fn () => Buffer.contentsSlice lb 4 5)
+      val () = checkRaises "contentsSlice negative start raises" (fn () => Buffer.contentsSlice lb ~1 2)
+
+      val () = section "Buffer appChars / foldChars"
+
+      val ab = Buffer.empty ()
+      val () = Buffer.addString ab "hello"
+      val collected = ref []
+      val () = Buffer.appChars (fn c => collected := c :: !collected) ab
+      val () = checkString "appChars visits in order"
+                 ("hello", String.implode (List.rev (!collected)))
+      val () = checkInt "foldChars counts" (5, Buffer.foldChars (fn (_, a) => a + 1) 0 ab)
+      val () = checkString "foldChars reverse"
+                 ("olleh", String.implode (Buffer.foldChars (fn (c, a) => c :: a) [] ab))
+      val () = checkInt "foldChars empty" (0, Buffer.foldChars (fn (_, a) => a + 1) 0 (Buffer.empty ()))
     in
       ()
     end

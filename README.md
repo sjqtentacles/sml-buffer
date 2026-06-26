@@ -23,17 +23,41 @@ val new          : int -> buffer          (* initial capacity hint *)
 val empty        : unit -> buffer
 val length       : buffer -> int
 val isEmpty      : buffer -> bool
+val capacity     : buffer -> int           (* allocated bytes (>= length) *)
+
+(* appends (mutate in place) *)
 val addChar      : buffer -> char -> unit
 val addString    : buffer -> string -> unit
 val addSubstring : buffer -> substring -> unit
 val addBuffer    : buffer -> buffer -> unit
+val addChars     : buffer -> char -> int -> unit   (* char repeated n times *)
+val addInt       : buffer -> int -> unit           (* decimal rendering *)
+val addLine      : buffer -> string -> unit        (* string + newline *)
+
+(* read *)
 val contents     : buffer -> string
+val contentsSlice : buffer -> int -> int -> string (* [start, start+len) *)
 val sub          : buffer -> int -> char
+val last         : buffer -> char option
+val appChars     : (char -> unit) -> buffer -> unit
+val foldChars    : (char * 'a -> 'a) -> 'a -> buffer -> 'a
+
+(* mutate *)
+val update       : buffer -> int -> char -> unit   (* overwrite byte i *)
 val clear        : buffer -> unit
+val truncate     : buffer -> int -> unit           (* keep first n bytes *)
+val reserve      : buffer -> int -> unit           (* grow capacity *)
+
+(* one-shot builders *)
 val build        : (buffer -> unit) -> string
 val concat       : string list -> string
 val concatWith   : string -> string list -> string
 ```
+
+`sub`, `update`, and `contentsSlice` raise `Subscript` on an out-of-range
+index; `last` returns `NONE` for an empty buffer. `truncate b n` drops
+everything past the first `n` bytes (a no-op when `n >= length`, clears when
+`n < 0`) while keeping the allocated capacity; `reserve` only ever grows it.
 
 ### Example
 
@@ -47,6 +71,16 @@ val s = Buffer.build (fn b =>
 
 (* One-shot concatenation. *)
 val joined = Buffer.concatWith ", " ["a", "b", "c"]   (* "a, b, c" *)
+
+(* Render a small table with repeats, ints, and line breaks. *)
+val report = Buffer.build (fn b =>
+  ( Buffer.addLine b "name   score"
+  ; Buffer.addChars b #"-" 12; Buffer.addChar b #"\n"
+  ; Buffer.addString b "alice  "; Buffer.addInt b 42; Buffer.addChar b #"\n" ))
+
+(* Read back individual bytes / slices. *)
+val sliced = Buffer.contentsSlice (let val b = Buffer.empty ()
+                                   in Buffer.addString b "abcdef"; b end) 2 3  (* "cde" *)
 ```
 
 ## Build & test
@@ -83,7 +117,7 @@ lib/github.com/sjqtentacles/sml-buffer/
   sml-buffer.mlb  public basis
 test/
   harness.sml   shared assertion harness
-  test.sml      the suite (23 checks)
+  test.sml      the suite (53 checks)
   entry.sml     defines main
   main.sml      MLton top-level call
 tools/polybuild Poly/ML build wrapper
@@ -91,10 +125,13 @@ tools/polybuild Poly/ML build wrapper
 
 ## Tests
 
-23 deterministic checks covering append (char/string/substring/buffer),
-length and bounds-checked `sub`, `clear`/reuse, growth across several
-doublings (10k appends), and the `concat`/`concatWith` helpers. Run
-`make all-tests` to verify identical output under both compilers.
+53 deterministic checks covering append (char/string/substring/buffer), the
+`addChars`/`addInt`/`addLine` helpers, `capacity`/`reserve`/`truncate`,
+`last`/`update`/`contentsSlice` with `Subscript` bounds checks,
+`appChars`/`foldChars` iteration, length and bounds-checked `sub`,
+`clear`/reuse, growth across several doublings (10k appends), and the
+`concat`/`concatWith` helpers. Run `make all-tests` to verify identical output
+under both compilers.
 
 ## License
 
